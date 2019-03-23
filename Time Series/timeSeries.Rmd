@@ -1,0 +1,321 @@
+---
+title: "Time Series Modeling"
+author: "Shubham Agrawal"
+date: "22 March 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+A time series is a series of data points indexed (or listed or graphed) in time order. Most commonly, a time series is a sequence taken at successive equally spaced points in time. Thus it is a sequence of discrete-time data. Time series analysis comprises methods for analyzing time series data in order to extract meaningful statistics and other characteristics of the data. Time series forecasting is the use of a model to predict future values based on previously observed values. _Source:_ [Wikipedia](https://en.wikipedia.org/wiki/Time_series)
+
+
+### Reading Time Series Data
+
+Use the scan() function, which assumes that your data for successive time points is in a simple text file with one column.
+
+```{r}
+kings <- scan("http://robjhyndman.com/tsdldata/misc/kings.dat",skip=3)
+kings
+```
+
+Now, we store the data in a time series object using ts().
+
+```{r}
+kingsTS <- ts(kings)
+kingsTS
+```
+
+In case data is recorded monthy or quaterly, we can use the 'frequency' parameter of ts().
+For monthy data, frequency = 12
+For quaterly data, frequency = 4
+
+We can also specify the first year that the data was collected, and the first interval in that year by using the 'start' parameter in the ts() function. For example, if the first data point corresponds to the June of 1995, you would set start=c(1995,6)
+
+```{r}
+births <- scan("http://robjhyndman.com/tsdldata/data/nybirths.dat")
+birthsTS <- ts(births, frequency=12, start=c(1946,1))
+birthsTS
+```
+
+Similarly...
+
+```{r}
+souvenir <- scan("http://robjhyndman.com/tsdldata/data/fancy.dat")
+souvenirTS <- ts(souvenir, frequency=12, start=c(1987,1))
+souvenirTS
+```
+
+
+### Plotting Time Series object
+
+Before plotting the data, first we should learn about the components of a time series. So any time series can contain some or all of the following components:
+
+1. Trend (T)
+2. Cyclical (C)
+3. Seasonal (S)
+4. Irregular (I)
+
+These components may be combined in different ways.  It is usually assumed that they are multiplied oradded, i.e.,
+
+                                          y = T + C + S + I
+                                          y = T x C x S x I
+
+
+**Trend component: **The trend is the long term pattern of a time series. A trend can be positive or negative depending on whetherthe time series exhibits an increasing long term pattern or a decreasing long term pattern.If a time series does not show an increasing or decreasing pattern then the series is stationary in the mean.
+
+**Cyclical component: **Any pattern showing an up and down movement around a given trend is identified as a cyclical pattern. The duration of a cycle depends on the type of business or industry being analyzed.
+
+**Seasonal component: **Seasonality occurs when the time series exhibits regular fluctuations during the same month (or months) every year, or during the same quarter every year. For instance, retail sales peak during the month of December.
+
+**Irregular component: **This  component  is  unpredictable. Every time series has some unpredictable component that makes it a random variable. In prediction, the objective is to “model” all the components to the point that the onlycomponent that remains unexplained is the random component.
+
+Now, we can plot our time series object using plot.ts() and see if these components are present or not.
+
+```{r}
+plot.ts(kingsTS, col = 'darkgreen', lwd = 1.5)
+```
+
+We can see from the time plot that this time series could probably be described using an additive model, since the random fluctuations in the data are roughly constant in size over time.
+
+```{r}
+plot.ts(birthsTS, col = 'brown', lwd = 1.3)
+```
+
+There seems to be seasonal variation in the number of births per month. Again, it seems that this time series could probably be described using an additive model, as the seasonal fluctuations are roughly constant in size over time and do not seem to depend on the level of the time series, and the random fluctuations also seem to be roughly constant in size over time.
+
+```{r}
+plot.ts(souvenirTS, col = 'red', lwd = 1.5)
+```
+
+Here, we see that an additive model is not appropriate for describing this time series, since the size of the seasonal fluctuations and random fluctuations seem to increase with the level of the time series. Thus, we transorm the multiplicative model into additive model by taking the natural log of the original data.
+
+```{r}
+souvenirTSlog <- log(souvenirTS)
+plot.ts(souvenirTSlog, col = 'blue', lwd = 1.5)
+```
+
+### Decomposing Time Series
+
+It means splitting the time series into its constituent components, which are usually a trend component and an irregular component, and if it is a seasonal time series, a seasonal component.
+
+#### Decomposing Non-Seasonal Data
+
+A non-seasonal time series consists of a trend component and an irregular component. Decomposing it involves trying to separate the time series into these components, i.e., estimating the the trend component and the irregular component. This involves a smoothing method, such as calculating the simple moving average of the time series.
+
+   _In financial applications a simple moving average (SMA) is the unweighted mean of the previous n data. However, in science and engineering, the mean is normally taken from an equal number of data on either side of a central value. This ensures that variations in the mean are aligned with the variations in the data rather than being shifted in time._ Source: [Wikipedia.](https://en.wikipedia.org/wiki/Moving_average#Simple_moving_average)
+
+```{r}
+library(TTR)
+kingsTSsma3 <- SMA(kingsTS, n = 3)
+plot.ts(kingsTS, col = 'darkgreen', lwd = 1.5)
+# After applying simple moving average
+plot.ts(kingsTSsma3, col = 'darkgreen', lwd = 1.5)
+```
+
+There still appears to be quite a lot of random fluctuations in the time series smoothed using a simple moving average of order 3. Thus, to estimate the trend component more accurately, we might want to try smoothing the data with a simple moving average of a higher order. Using trial and error, we find that n = 8 will do the decomposing.
+
+```{r}
+kingsTSsma8 <- SMA(kingsTS, n = 8)
+plot.ts(kingsTSsma8, col = 'darkgreen', lwd = 1.5)
+```
+
+The data smoothed with a simple moving average of order 8 gives a clearer picture of the trend component, and we can see that the age of death of the English kings seems to have decreased from about 55 years old to about 38 years old during the reign of the first 20 kings, and then increased after that to about 73 years old by the end of the reign of the 40th king in the time series.
+
+#### Decomposing Seasonal Data
+
+To estimate the trend component and seasonal component of a seasonal time series that can be described using an additive model, we can use the “decompose()” function in R. This function estimates the trend, seasonal, and irregular components of a time series that can be described using an additive model.
+
+```{r}
+birthsTScomponents <- decompose(birthsTS)
+# To extract the seasonal component
+birthsTScomponents$seasonal
+plot(birthsTScomponents, col = 'purple')
+```
+
+**Seasonal Adjusting: **If you have a seasonal time series that can be described using an additive model, you can seasonally adjust the time series by estimating the seasonal component, and subtracting the estimated seasonal component from the original time series.
+
+```{r}
+birthsTSadjusted <- birthsTS - birthsTScomponents$seasonal
+plot(birthsTSadjusted, col = 'purple', lwd = 1.5)
+```
+
+We can see that the seasonal variation has been removed from the seasonally adjusted time series. The seasonally adjusted time series now just contains the trend component and an irregular component.
+
+### Forecasts using Exponential Smoothing
+
+Exponential smoothing is a rule of thumb technique for smoothing time series data using the exponential window function. Whereas in the simple moving average the past observations are weighted equally, exponential functions are used to assign exponentially decreasing weights over time. It is an easily learned and easily applied procedure for making some determination based on prior assumptions by the user, such as seasonality. Exponential smoothing is often used for analysis of time-series data. _Source: [Wikipedia](https://en.wikipedia.org/wiki/Exponential_smoothing)_ 
+
+#### Simple Exponential Smoothing
+
+If you have a time series that can be described using an additive model with constant level and no seasonality, you can use simple exponential smoothing to make short-term forecasts.
+
+Smoothing is controlled by the parameter alpha; for the estimate of the level at the current time point. The value of alpha; lies between 0 and 1. Values of alpha that are close to 0 mean that little weight is placed on the most recent observations when making forecasts of future values.
+
+```{r}
+rain <- scan("http://robjhyndman.com/tsdldata/hurst/precip1.dat", skip=1)
+rainTS <- ts(rain, start = c(1813))
+plot.ts(rainTS, col = 'blue', lwd = 1.5)
+
+# beta and gamma are assigned FALSE in case of simple exponential smoothing
+rainTSforecasts <- HoltWinters(rainTS, beta=FALSE, gamma=FALSE)
+rainTSforecasts
+```
+
+The output of HoltWinters() tells us that the estimated value of the alpha parameter is about 0.024. This is very close to zero, telling us that the forecasts are based on both recent and less recent observations. By default, HoltWinters() just makes forecasts for the same time period covered by our original time series. In this case, our original time series included rainfall for London from 1813-1912, so the forecasts are also for 1813-1912. 
+
+```{r}
+plot(rainTSforecasts, col = 'blue', lwd = 1.5)
+```
+
+The plot shows the original time series in blue, and the forecasts as a pink line. 
+
+```{r}
+library(forecast)
+rainTSforecasts10 <- forecast:::forecast.HoltWinters(rainTSforecasts, h=10)
+rainTSforecasts10$residuals
+plot(rainTSforecasts10, col = 'green')
+```
+
+One measure of the accuracy of the predictive model is the sum-of-squared-errors (SSE) for the in-sample forecast errors. If the predictive model cannot be improved upon, there should be no correlations between forecast errors for successive predictions. In other words, if there are correlations between forecast errors for successive predictions, it is likely that the simple exponential smoothing forecasts could be improved upon by another forecasting technique.
+
+```{r}
+acf(rainTSforecasts10$residuals, lag.max=20,  na.action = na.pass)
+```
+
+You can see from the sample correlogram that the autocorrelation at lag 3 is just touching the significance bounds. To test whether there is significant evidence for non-zero correlations at lags 1-20, we can carry out a **Ljung-Box test**. The Ljung–Box test is a type of statistical test of whether any of a group of autocorrelations of a time series are different from zero. Instead of testing randomness at each distinct lag, it tests the "overall" randomness based on a number of lags, and is therefore a portmanteau test (A portmanteau test is a type of statistical hypothesis test in which the null hypothesis is well specified, but the alternative hypothesis is more loosely specified). _Source: [Wikipedia.](https://en.wikipedia.org/wiki/Ljung%E2%80%93Box_test)_
+
+```{r}
+Box.test(rainTSforecasts10$residuals, lag=20, type="Ljung-Box")
+```
+
+Here, p-value is 0.62, so there is little evidence of non-zero autocorrelations in the in-sample forecast errors at lags 1-20.
+
+```{r}
+plot.ts(rainTSforecasts10$residuals, col = 'red', lwd = 1.5)
+```
+
+The plot shows that the in-sample forecast errors seem to have roughly constant variance over time, although the size of the fluctuations in the start of the time series (1820-1830) may be slightly less than that at later dates.
+
+_Note: We can plot a histogram of the forecast errors, with an overlaid normal curve that has mean zero and the same standard deviation as the distribution of forecast errors to check whether the forecast errors are normally distributed with mean zero. This can also prove that our model is adequate._
+
+#### Holt’s Exponential Smoothing
+
+We use Holt’s exponential smoothing to make short-term forecasts when a time series is described using an additive model with increasing or decreasing trend and no seasonality. Holt’s exponential smoothing estimates the level and slope at the current time point. Smoothing is controlled by two parameters, alpha, for the estimate of the level at the current time point, and beta for the estimate of the slope b of the trend component at the current time point.
+
+```{r}
+skirts <- scan("http://robjhyndman.com/tsdldata/roberts/skirts.dat",skip=5)
+skirtsTS <- ts(skirts,start=c(1866))
+plot.ts(skirtsTS, col = 'orange', lwd = 1.5)
+skirtsTSforecasts <- HoltWinters(skirtsTS, gamma=FALSE,  l.start=608, b.start=9)
+skirtsTSforecasts
+```
+The estimated value of alpha is 0.84, and of beta is 1.00. These are both high, telling us that both the estimate of the current value of the level, and of the slope b of the trend component, are based mostly upon very recent observations in the time series.
+
+```{r}
+plot(skirtsTSforecasts, lwd = 2)
+```
+
+We can see from the picture that the in-sample forecasts (red line) agree pretty well with the observed values (black line), although they tend to lag behind the observed values a little bit.
+
+```{r}
+skirtsTSforecasts15 <- forecast:::forecast.HoltWinters(skirtsTSforecasts, h=15)
+plot(skirtsTSforecasts15, col = 'orange', lwd = 1.5)
+acf(skirtsTSforecasts15$residuals, lag.max=20, na.action = na.pass)
+Box.test(skirtsTSforecasts15$residuals, lag=20, type="Ljung-Box")
+plot.ts(skirtsTSforecasts15$residuals, col = 'red', lwd = 1.5)
+```
+
+Here the correlogram shows that the sample autocorrelation for the in-sample forecast errors at lag 5 exceeds the significance bounds. However, we would expect one in 20 of the autocorrelations for the first twenty lags to exceed the 95% significance bounds by chance alone. Indeed, when we carry out the Ljung-Box test, the p-value is 0.51, indicating that there is little evidence of non-zero autocorrelations in the in-sample forecast errors at lags 1-20. And the time plot of forecast errors shows that the forecast errors have roughly constant variance over time. Therefore, we can conclude that Holt’s exponential smoothing provides an adequate predictive model for skirt hem diameters, which probably cannot be improved upon.
+
+#### Holt-Winters Exponential Smoothing
+
+This model is used when we have a time series with seasonality. Smoothing is controlled by three parameters: alpha, beta, and gamma, for the estimates of the level, slope b of the trend component, and the seasonal component, respectively, at the current time point. The parameters alpha, beta and gamma all have values between 0 and 1, and values that are close to 0 mean that relatively little weight is placed on the most recent observations when making forecasts of future values.
+
+```{r}
+souvenirTSlogforecasts <- HoltWinters(souvenirTSlog)
+souvenirTSlogforecasts
+```
+
+The value of alpha (0.41) is relatively low, indicating that the estimate of the level at the current time point is based upon both recent observations and some observations in the more distant past. The value of beta is 0.00, indicating that the estimate of the slope b of the trend component is not updated over the time series, and instead is set equal to its initial value. This makes good intuitive sense, as the level changes quite a bit over the time series, but the slope b of the trend component remains roughly the same. In contrast, the value of gamma (0.96) is high, indicating that the estimate of the seasonal component at the current time point is just based upon very recent observations.
+
+```{r}
+plot(souvenirTSlogforecasts, lwd = 1.5)
+souvenirTSforecasts48 <- forecast:::forecast.HoltWinters(souvenirTSlogforecasts, h=48)
+plot(souvenirTSforecasts48, col = 'green')
+acf(souvenirTSforecasts48$residuals, lag.max=20, na.action = na.pass)
+Box.test(souvenirTSforecasts48$residuals, lag=20, type="Ljung-Box")
+plot.ts(souvenirTSforecasts48$residuals, col = 'red', lwd = 1.5)
+```
+
+The correlogram shows that the autocorrelations for the in-sample forecast errors do not exceed the significance bounds for lags 1-20. Furthermore, the p-value for Ljung-Box test is 0.6, indicating that there is little evidence of non-zero autocorrelations at lags 1-20. From the time plot, it appears plausible that the forecast errors have constant variance over time. From the time plot, it appears plausible that the forecast errors have constant variance over time.
+
+### ARIMA Model
+
+An **autoregressive integrated moving average** (ARIMA) model is a generalization of an autoregressive moving average (ARMA) model. Both of these models are fitted to time series data either to better understand the data or to predict future points in the series (forecasting). ARIMA models are applied in some cases where data show evidence of non-stationarity, where an initial differencing step (corresponding to the "integrated" part of the model) can be applied one or more times to eliminate the non-stationarity.
+
+* The **AR** part of ARIMA indicates that the evolving variable of interest is regressed on its own lagged (i.e., prior) values.
+* The **MA** part indicates that the regression error is actually a linear combination of error terms whose values occurred contemporaneously and at various times in the past.
+* The **I** (for "integrated") indicates that the data values have been replaced with the difference between their values and the previous values (and this differencing process may have been performed more than once).
+
+The purpose of each of these features is to make the model fit the data as well as possible. Non-seasonal ARIMA models are generally denoted ARIMA(p,d,q) where parameters p, d, and q are non-negative integers, p is the order (number of time lags) of the autoregressive model, d is the degree of differencing (the number of times the data have had past values subtracted), and q is the order of the moving-average model. _Source: [Wikipedia](https://en.wikipedia.org/wiki/Box%E2%80%93Jenkins_method)_
+
+ARIMA models include an explicit statistical model for the irregular component of a time series, that allows for non-zero autocorrelations in the irregular component.
+
+**Differencing a Time Series: **Differencing in statistics is a transformation applied to time-series data in order to make it stationary. A stationary time series' properties do not depend on the time at which the series is observed. ARIMA models are defined for stationary time series. Therefore, if you start off with a non-stationary time series, you will first need to ‘difference’ the time series until you obtain a stationary time series. Let's plot the time series of the age of death of the successive kings of England.
+
+```{r}
+plot.ts(kingsTS, col = 'darkgreen', lwd = 1.5)
+```
+
+From the time plot, we can see that the time series is not stationary in mean. Therefore, we difference the time series.
+
+```{r}
+kingsTSdiff <- diff(kingsTS, differences = 1)
+plot.ts(kingsTSdiff, col = 'darkgreen', lwd = 1.5)
+```
+
+The time series of first differences appears to be stationary in mean and variance, and so an **ARIMA(p,1,q)** model is probably appropriate for the time series of the age of death of the kings of England. After removing the trend component, we are left with the irregular component. 
+
+**Selecting an ARIMA Model: **Now, to find the value of p and q, we examine the correlogram and partial correlogram of the stationary time series. 
+
+```{r}
+acf(kingsTSdiff, lag.max=20, na.action = na.pass)
+pacf(kingsTSdiff, lag.max=20, na.action = na.pass)
+```
+
+We see from the correlogram that the autocorrelation at lag 1 exceeds the significance bounds, but all other autocorrelations between lags 1-20 do not exceed the significance bounds. And the partial correlogram shows that the partial autocorrelations at lags 1, 2 and 3 exceed the significance bounds, are negative, and are slowly decreasing in magnitude with increasing lag. The partial autocorrelations tail off to zero after lag 3. 
+
+Since the correlogram is zero after lag 1, and the partial correlogram tails off to zero after lag 3, this means that the following ARMA (autoregressive moving average) models are possible for the time series of first differences:
+
+* an ARMA(3,0) model, that is, an autoregressive model of order p=3, since the partial autocorrelogram is zero after lag 3, and the autocorrelogram tails off to zero (although perhaps too abruptly for this model to be appropriate)
+* an ARMA(0,1) model, that is, a moving average model of order q=1, since the autocorrelogram is zero after lag 1 and the partial autocorrelogram tails off to zero
+* an ARMA(p,q) model, that is, a mixed model with p and q greater than 0, since the autocorrelogram and partial correlogram tail off to zero (although the correlogram probably tails off to zero too abruptly for this model to be appropriate)
+
+We use the principle of parsimony to decide which model is best: that is, we assume that the model with the fewest parameters is best. The ARMA(3,0) model has 3 parameters, the ARMA(0,1) model has 1 parameter, and the ARMA(p,q) model has at least 2 parameters. Therefore, the **ARMA(0,1)** model is taken as the best model. Since an ARMA(0,1) model is taken to be the best candidate model for the time series of first differences of the ages at death of English kings, then the original time series of the ages of death can be modelled using an **ARIMA(0,1,1)** model.
+
+_NOTE: We can make use of auto.arima() from forecast library to find the best model._
+
+```{r}
+auto.arima(kings)
+```
+
+**Forecasting Using an ARIMA Model: **Once you have selected the best candidate ARIMA(p,d,q) model for your time series data, you can estimate the parameters of that ARIMA model, and use that as a predictive model for making forecasts for future values of your time series.
+
+```{r}
+kingsTSarima <- arima(kingsTS, order = c(0,1,1))
+kingsTSarima
+kingsTSforecast10 <- forecast:::forecast.Arima(kingsTSarima, h =10)
+plot(kingsTSforecast10, col = 'green')
+acf(kingsTSforecast10$residuals, lag.max=20, na.action = na.pass)
+Box.test(kingsTSforecast10$residuals, lag=20, type="Ljung-Box")
+plot.ts(kingsTSforecast10$residuals, col = 'red', lwd = 1.5)
+```
+
+Since the correlogram shows that none of the sample autocorrelations for lags 1-20 exceed the significance bounds, and the p-value for the Ljung-Box test is 0.85, we can conclude that there is very little evidence for non-zero autocorrelations in the forecast errors at lags 1-20. Since successive forecast errors do not seem to be correlated, and the forecast errors seem to have constant variance, the ARIMA(0,1,1) does seem to provide an adequate predictive model for the ages at death of English kings. 
+
+_**Thus, we have successfully examined and analysed different time series using various models.**_
