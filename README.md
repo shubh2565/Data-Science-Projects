@@ -4,3 +4,4 @@ This repository contains several projects to undestand how to apply various data
 
 * [Big Mart Dataset Analysis](https://github.com/shubh2565/Data-Science-Projects/tree/master/BigMart)
 * [Time Series Analysis](https://github.com/shubh2565/Data-Science-Projects/tree/master/Time%20Series)
+* [Red wine dataset exploration](https://github.com/shubh2565/Data-Science-Projects/tree/master/wine%20quality)
